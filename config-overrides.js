@@ -1,7 +1,8 @@
 const path = require('path');
 const fs = require('fs');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-
+const ManifestPlugin = require('webpack-manifest-plugin');
+const paths = require('react-scripts/config/paths');
 const appDirectory = fs.realpathSync(process.cwd());
 const resolveApp = relativePath => path.resolve(appDirectory, relativePath);
 
@@ -37,6 +38,7 @@ module.exports = function override(config, env) {
     Object.assign(
       {},
       {
+        filename: 'index.html',
         inject: true,
         template: resolveApp('public/index.html'),
         chunks: ['index']
@@ -67,6 +69,7 @@ module.exports = function override(config, env) {
       Object.assign(
         {},
         {
+          filename: 'admin.html',
           inject: true,
           template: resolveApp('public/admin.html'),
           chunks: ['admin']
@@ -90,6 +93,33 @@ module.exports = function override(config, env) {
       )
     )
   );
+
+  const publicPath = isEnvProduction
+      ? paths.servedPath
+      : isEnvDevelopment && '/';
+
+  const multiEntryManfiestPlugin = new ManifestPlugin({
+    fileName: 'asset-manifest.json',
+    publicPath: publicPath,
+    generate: (seed, files, entrypoints) => {
+      const manifestFiles = files.reduce((manifest, file) => {
+        manifest[file.name] = file.path;
+        return manifest;
+      }, seed);
+
+      const entrypointFiles = {};
+      Object.keys(entrypoints).forEach(entrypoint => {
+        entrypointFiles[entrypoint] = entrypoints[entrypoint].filter(fileName => !fileName.endsWith('.map'));
+      });
+
+      return {
+        files: manifestFiles,
+        entrypoints: entrypointFiles,
+      };
+    },
+  });
+
+  config.plugins = replacePlugin(config.plugins, (name) => /ManifestPlugin/i.test(name), multiEntryManfiestPlugin);
 
   return config;
 };
